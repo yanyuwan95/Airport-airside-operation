@@ -1,16 +1,15 @@
 import sys
 
-import pandas as pd
 import traci
 from sumolib import checkBinary
 import time
 import configparser
 import pickle
-from SimSA_v2.forFindDepartInfo import findDepartInfo
-from SimSA_v2.forTrafficControl import trafficControl
-from SimSA_v2.forFindDepartInfo import  create_min_sep_time
+from SimSA_v3.forFindDepartInfo import findDepartInfo
+from SimSA_v3.forTrafficControl import trafficControl
+from SimSA_v3.forFindDepartInfo import  create_min_sep_time
 
-from myFunction import *
+from SimSA_v3.myFunction import *
 import random
 from itertools import groupby
 

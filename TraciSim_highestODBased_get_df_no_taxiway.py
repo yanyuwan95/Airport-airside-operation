@@ -12,7 +12,7 @@ from SimSA_v3.myFunction import *
 import random
 from itertools import groupby
 
-#pd.set_option('max_rows', None)
+pd.set_option('max_rows', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 
@@ -58,7 +58,7 @@ class highestODSim(object):
     def run_get_objective_iter(self, dict_state):
 
         dict_depart, df_depart = self._findDepartInfo.findDepartDictandDf(dict_state, self.df_traffic_scenario, self.dict_min_rwy_sep)
-
+        # print(dict_depart)
 
         # make sure runway are already for landing at the begining
         self.dict_rwy_free_time = {k: 3600 for k, g in self.dict_map_info['dict_rwy_to_edge'].items()}
@@ -66,9 +66,9 @@ class highestODSim(object):
 
         traci.start([self.sumoBinary, "-c", self.sumoFile])
 
-        number_of_conflicts, total_fuel_consumption, total_taxi_time_for_all_air, df_speed = self.run_iter(df_depart, dict_depart)
+        number_of_conflicts, total_fuel_consumption, total_taxi_time_for_all_air, wait_time, df_speed = self.run_iter(df_depart, dict_depart)
 
-        return number_of_conflicts, total_fuel_consumption, total_taxi_time_for_all_air, df_speed
+        return number_of_conflicts, total_fuel_consumption, total_taxi_time_for_all_air, wait_time, df_speed
 
     def run_get_objective(self, dict_state):
 
@@ -81,9 +81,9 @@ class highestODSim(object):
 
         traci.start([self.sumoBinary, "-c", self.sumoFile])
 
-        number_of_conflicts, total_fuel_consumption, total_taxi_time_for_all_air = self.run(df_depart, dict_depart)
+        number_of_conflicts, total_fuel_consumption, total_taxi_time_for_all_air, wait_time = self.run(df_depart, dict_depart)
 
-        return number_of_conflicts, total_fuel_consumption, total_taxi_time_for_all_air
+        return number_of_conflicts, total_fuel_consumption, total_taxi_time_for_all_air, wait_time
 
 
     def run_iter(self, df_depart, dict_depart):
@@ -92,7 +92,7 @@ class highestODSim(object):
         start_time = time.time()
         step = 0
 
-        np_speed_loc = np.zeros([1, 9])  # first row is hallucinated
+        np_speed_loc = np.zeros([1, 10])  # first row is hallucinated
 
         self.dict_reset_route = {}
         while traci.simulation.getMinExpectedNumber() > 0:
@@ -155,7 +155,7 @@ class highestODSim(object):
                 break
 
         np_speed_loc = np.delete(np_speed_loc, 0, 0)  # delete first hallucinated row
-        df = pd.DataFrame(data=np_speed_loc, columns=['time', 'id', 'speed', 'acceleration', 'edge_id', 'x', 'y', 'if_hold', 'operation'])
+        df = pd.DataFrame(data=np_speed_loc, columns=['time', 'id', 'speed', 'acceleration', 'edge_id', 'x', 'y', 'if_hold', 'operation', 'sum_free_rwy_time'])
         df['id'] = df['id'].astype(int).map(str)
         total_taxi_time_for_all_air = df['time'].max()
 
@@ -175,10 +175,12 @@ class highestODSim(object):
 
         # total_congestion_time = len(df[df['if_hold'] == 5])
 
+        wait_time = df['sum_free_rwy_time'].sum()
+
         traci.close()
         sys.stdout.flush()
 
-        return number_of_conflicts, total_fuel_consumption, neg_airport_hourly_throughput, df
+        return number_of_conflicts, total_fuel_consumption, neg_airport_hourly_throughput, wait_time, df
 
     def run(self, df_depart, dict_depart):
         """execute the TraCI control loop"""
@@ -186,7 +188,7 @@ class highestODSim(object):
         start_time = time.time()
         step = 0
 
-        np_speed_loc = np.zeros([1, 9])  # first row is hallucinated
+        np_speed_loc = np.zeros([1, 10])  # first row is hallucinated
 
         self.dict_reset_route = {}
         while traci.simulation.getMinExpectedNumber() > 0:
@@ -249,15 +251,13 @@ class highestODSim(object):
                 break
 
         np_speed_loc = np.delete(np_speed_loc, 0, 0)  # delete first hallucinated row
-        df = pd.DataFrame(data=np_speed_loc, columns=['time', 'id', 'speed', 'acceleration', 'edge_id', 'x', 'y', 'if_hold', 'operation'])
+        df = pd.DataFrame(data=np_speed_loc, columns=['time', 'id', 'speed', 'acceleration', 'edge_id', 'x', 'y', 'if_hold', 'operation', 'wait_time'])
         df['id'] = df['id'].astype(int).map(str)
-        total_taxi_time_for_all_air = df['time'].max() - df['time'].min()
+        total_taxi_time_for_all_air = df['time'].max()
 
         lst_df = [g for _, g in df.groupby(['id'])]
 
         neg_airport_hourly_throughput = -1*(len(lst_df) / (total_taxi_time_for_all_air / 3600))
-
-
 
         number_of_conflicts = sum(list(map(self.count_conflict, lst_df)))
 
@@ -271,10 +271,12 @@ class highestODSim(object):
 
         # total_congestion_time = len(df[df['if_hold'] == 5])
 
+        wait_time = df['wait_time'].sum()
+
         traci.close()
         sys.stdout.flush()
 
-        return number_of_conflicts, total_fuel_consumption, neg_airport_hourly_throughput
+        return number_of_conflicts, total_fuel_consumption, neg_airport_hourly_throughput, wait_time
     def count_conflict(self, df):
         if_hold_value = 5
         number_conflict = len([g for k, g in groupby(df['if_hold'].values) if k== if_hold_value])
@@ -298,7 +300,7 @@ class highestODSim(object):
         elif (road_id == 'E_10001') and (veh_control['if_hold']==0):
             return None
         else:
-            np_air_speed = np.zeros([1, 9])
+            np_air_speed = np.zeros([1, 10])
             np_air_speed[0, 0] = step
             np_air_speed[0, 1] = veh_id
             np_air_speed[0, 2] = veh_control['speed']
@@ -309,6 +311,7 @@ class highestODSim(object):
             np_air_speed[0, 6] = air_position_y
             np_air_speed[0, 7] = veh_control['if_hold']
             np_air_speed[0, 8] = self.dict_operation[traci.vehicle.getColor(veh_id)]
+            np_air_speed[0, 9] = sum(self.dict_rwy_free_time.values())
             return np_air_speed
 
 

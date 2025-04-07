@@ -1,15 +1,14 @@
-import pandas as pd
-import numpy as np
-from xml.etree import ElementTree
 import configparser
-from myFunction import *
+from SimSA_v4.myFunction import *
 import random
 #pd.set_option('max_rows', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
 from itertools import product
+
+
 class findDepartInfo(object):
-    def __init__(self, control_config, random_seed, dict_rwy_id, df_highest_OD):
+    def __init__(self, control_config, random_seed, dict_rwy_id, df_highest_OD, dict_min_rwy_sep):
         np.random.seed(random_seed)
         self.arrivalControlOption = float(control_config['VariationSettings']['arrivalControl'])
         self.gatePushControlOption = float(control_config['VariationSettings']['getPushControl'])
@@ -19,9 +18,14 @@ class findDepartInfo(object):
 
         lst_highest_OD_key = list(zip(self.df_highest_OD['rwy_id'].values.tolist(), self.df_highest_OD['ramp_id'].values.tolist(), self.df_highest_OD['operation'].values.tolist()))
 
+        self.lst_unique_rwy_id = list(set(self.df_highest_OD['rwy_id'].values.tolist()))
+
 
         self.dict_highest_OD = dict(zip(lst_highest_OD_key, self.df_highest_OD['update_edge_seq'].values.tolist()))
+        # print(self.dict_highest_OD)
         # {('06L/24R', '0', 'A'): '[1349, 1351]}'
+
+        self.dict_min_rwy_sep = dict_min_rwy_sep
 
     def rewrite_update_edge_seq(self, route_i):
         route_i = route_i.split('[')[1]
@@ -66,11 +70,11 @@ class findDepartInfo(object):
         # self.dict_highest_OD {}
         df_depart = df_traffic_scenario[['operation','veh_id', 'ramp_id', 'ICAO_type', 'fuel_rate_idle', 'fuel_rate_approach']]
 
-        df_depart.loc[:, 'rwy_id'] = df_depart['veh_id'].map(dict_state)
 
-        lst_rwy_ramp = list(zip(df_depart['rwy_id'].values.tolist(), df_depart['ramp_id'].values.tolist(), df_depart['operation'].values.tolist()))
 
-        df_depart.loc[:, 'edge_list'] = [x if x not in self.dict_highest_OD else self.dict_highest_OD[x] for x in lst_rwy_ramp]
+        #print(df_depart)
+
+        #print(self.dict_highest_OD)
 
         df_depart.loc[:, 'depart_time'] = df_traffic_scenario['start_time_in_minute_update']
 
@@ -91,11 +95,27 @@ class findDepartInfo(object):
 
         # df_depart = pd.concat(lst_df_depart)
 
-        df_depart.loc[:, 'first_depart_edge'] = df_depart['edge_list'].apply(lambda x: x.split(' ')[0])
-
         df_depart = self.addScheduleVar(df_depart)
 
-        df_depart.loc[:, 'veh_id'] = df_depart['veh_id'].astype(str)
+        df_depart.loc[:, 'rwy_id'] = df_depart['veh_id'].map(dict_state)
+
+        df_depart['ramp_id'] = df_depart['ramp_id'].astype(int)
+
+        #df_depart['ramp_id'] = df_depart['ramp_id'].astype(str)
+
+        lst_rwy_ramp = list(zip(df_depart['rwy_id'].values.tolist(), df_depart['ramp_id'].values.tolist(),
+                                df_depart['operation'].values.tolist()))
+
+        #print(lst_rwy_ramp[0])
+        #print(self.dict_highest_OD)
+
+        df_depart.loc[:, 'edge_list'] = [x if x not in self.dict_highest_OD else self.dict_highest_OD[x] for x in
+                                         lst_rwy_ramp]
+
+        df_depart.loc[:, 'first_depart_edge'] = df_depart['edge_list'].apply(lambda x: x.split(' ')[0])
+
+
+        df_depart['veh_id'] = df_depart['veh_id'].apply(lambda x: str(x))
 
 
         dict_depart_info = {}

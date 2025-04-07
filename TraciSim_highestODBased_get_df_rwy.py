@@ -4,11 +4,11 @@ from sumolib import checkBinary
 import time
 import configparser
 import pickle
-from SimSA_v3.forFindDepartInfo import findDepartInfo
-from SimSA_v3.forTrafficControl import trafficControl
-from SimSA_v3.forFindDepartInfo import create_min_sep_time
+from SimSA_v4.forFindDepartInfo import findDepartInfo
+from SimSA_v4.forTrafficControl import trafficControl
+from SimSA_v4.forFindDepartInfo import create_min_sep_time
 
-from SimSA_v3.myFunction import *
+from SimSA_v4.myFunction import *
 import random
 from itertools import groupby
 
@@ -30,6 +30,8 @@ class highestODSim(object):
         """set traffic rule parameter"""
         self.control_config = configparser.ConfigParser()
         self.control_config.read(self.simFileLoc + 'simulationSetting_' + str(sim_file_id) + '.ini')
+
+
 
         '''load map info'''
         self.dict_map_info = pickle.load(open(self.mapFileLoc+'dict_map_info.pkl', 'rb'))
@@ -53,7 +55,7 @@ class highestODSim(object):
 
         df_highest_OD = pd.read_csv(self.trafficFileLoc + 'update_highest_freq_OD.csv')
 
-        self._findDepartInfo = findDepartInfo(self.control_config, random_seed, dict_rwy_id, df_highest_OD)
+        self._findDepartInfo = findDepartInfo(self.control_config, random_seed, dict_rwy_id, df_highest_OD, dict_min_rwy_sep)
 
     def run_get_objective_iter(self, dict_state):
 
@@ -157,7 +159,7 @@ class highestODSim(object):
         np_speed_loc = np.delete(np_speed_loc, 0, 0)  # delete first hallucinated row
         df = pd.DataFrame(data=np_speed_loc, columns=['time', 'id', 'speed', 'acceleration', 'edge_id', 'x', 'y', 'if_hold', 'operation'])
         df['id'] = df['id'].astype(int).map(str)
-        total_taxi_time_for_all_air = df['time'].max()
+        total_taxi_time_for_all_air = df['time'].max()-df['time'].min()
 
         lst_df = [g for _, g in df.groupby(['id'])]
 
@@ -251,13 +253,11 @@ class highestODSim(object):
         np_speed_loc = np.delete(np_speed_loc, 0, 0)  # delete first hallucinated row
         df = pd.DataFrame(data=np_speed_loc, columns=['time', 'id', 'speed', 'acceleration', 'edge_id', 'x', 'y', 'if_hold', 'operation'])
         df['id'] = df['id'].astype(int).map(str)
-        total_taxi_time_for_all_air = df['time'].max() - df['time'].min()
+        total_taxi_time_for_all_air = df['time'].max()-df['time'].min()
 
         lst_df = [g for _, g in df.groupby(['id'])]
 
         neg_airport_hourly_throughput = -1*(len(lst_df) / (total_taxi_time_for_all_air / 3600))
-
-
 
         number_of_conflicts = sum(list(map(self.count_conflict, lst_df)))
 

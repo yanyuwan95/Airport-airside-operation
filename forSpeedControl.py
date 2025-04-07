@@ -1,9 +1,7 @@
-import pandas as pd
-import numpy as np
 import random
 # random.seed(seed=10)
-from myFunction import *
-import scipy
+from SimSA_v3.myFunction import *
+
 
 class speedControl(object):
     def __init__(self, dict_map_info, dict_option, random_seed):
